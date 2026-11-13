@@ -39,3 +39,11 @@ jobs:
             Build/FLEX.dylib
             Build/FLEX.dylib.sha256
           if-no-files-found: error
+
+      - name: Upload compiler diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLEX-XHSBridge-build-diagnostics-${{ github.sha }}
+          path: Build/**/*.log
+          if-no-files-found: ignore
