@@ -52,17 +52,19 @@ static NSDictionary *XHSRouteURLSummary(id value) {
     };
 }
 
+static NSArray<NSString *> *XHSRouteCallStack(void) {
+    NSArray<NSString *> *symbols = NSThread.callStackSymbols;
+    return symbols.count > 12
+        ? [symbols subarrayWithRange:NSMakeRange(0, 12)]
+        : symbols;
+}
+
 static void XHSRouteEntry(
     NSString *selector,
     id url,
     id source,
     BOOL isCold
 ) {
-    NSArray<NSString *> *callStack =
-        [NSThread callStackSymbols].count > 12
-            ? [[NSThread callStackSymbols]
-                subarrayWithRange:NSMakeRange(0, 12)]
-            : [NSThread callStackSymbols];
     XHSBridgeLog(@"deeplink_route_entry", @{
         @"selector": selector ?: @"",
         @"url": XHSRouteURLSummary(url),
@@ -70,7 +72,7 @@ static void XHSRouteEntry(
             ? NSStringFromClass(object_getClass(source)) ?: @""
             : @"<nil>",
         @"is_cold": @(isCold),
-        @"call_stack": callStack
+        @"call_stack": XHSRouteCallStack()
     });
 }
 
@@ -172,7 +174,8 @@ static void XHSRouteHandleOutsideURL(id self, SEL selector, id value) {
 static BOOL XHSRouteWhitelist(id self, SEL selector, id value) {
     XHSBridgeLog(@"deeplink_route_stage", @{
         @"selector": @"deeplinkToWitheListPageByUrl:",
-        @"url": XHSRouteURLSummary(value)
+        @"url": XHSRouteURLSummary(value),
+        @"call_stack": XHSRouteCallStack()
     });
     BOOL result = gOriginalWhitelistRoute
         ? gOriginalWhitelistRoute(self, selector, value)
@@ -187,7 +190,8 @@ static BOOL XHSRouteWhitelist(id self, SEL selector, id value) {
 static BOOL XHSRouteShortShare(id self, SEL selector, id value) {
     XHSBridgeLog(@"deeplink_route_stage", @{
         @"selector": @"checkShortSharePathAndRoute:",
-        @"url": XHSRouteURLSummary(value)
+        @"url": XHSRouteURLSummary(value),
+        @"call_stack": XHSRouteCallStack()
     });
     BOOL result = gOriginalShortShareRoute
         ? gOriginalShortShareRoute(self, selector, value)
@@ -208,7 +212,8 @@ static void XHSRouteJumpIfNeeded(
     XHSBridgeLog(@"deeplink_route_stage", @{
         @"selector": @"jumpIfNeeded:isNeedToSetIsInApp:",
         @"url": XHSRouteURLSummary(value),
-        @"is_in_app": @(setInApp)
+        @"is_in_app": @(setInApp),
+        @"call_stack": XHSRouteCallStack()
     });
     if (gOriginalJumpIfNeeded) {
         gOriginalJumpIfNeeded(self, selector, value, setInApp);
