@@ -21,6 +21,11 @@ static void XHSBridgeOpenNote(NSString *noteID, NSString *noteType) {
     if (!url) return;
 
     gRemoteBackArmed = YES;
+    XHSBridgeLog(@"xhs_deeplink_opened", @{
+        @"note_id": noteID,
+        @"note_type": noteType ?: @"",
+        @"url": value
+    });
     [[UIApplication sharedApplication] openURL:url
                                        options:@{}
                              completionHandler:nil];
@@ -72,9 +77,17 @@ static void XHSBridgeGoBack(void) {
     UINavigationController *navigation = visible.navigationController;
     if (visible.presentingViewController) {
         [visible dismissViewControllerAnimated:YES completion:nil];
+        XHSBridgeLog(@"xhs_back_executed", @{
+            @"mode": @"dismiss",
+            @"controller": NSStringFromClass(visible.class) ?: @""
+        });
     } else if (navigation.viewControllers.count > 1 &&
                navigation.topViewController == visible) {
         [navigation popViewControllerAnimated:YES];
+        XHSBridgeLog(@"xhs_back_executed", @{
+            @"mode": @"pop",
+            @"controller": NSStringFromClass(visible.class) ?: @""
+        });
     }
 }
 
