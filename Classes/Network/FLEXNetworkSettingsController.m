@@ -186,7 +186,7 @@
                     cell.textLabel.text = @"Reset Host Denylist";
                     cell.textLabel.textColor = tableView.tintColor;
                     break;
-                case 4:
+                case 4: {
                     cell.textLabel.text = self.cacheLimitCellTitle;
                     self.cacheLimitLabel = cell.textLabel;
                     [self.cacheLimitSlider removeFromSuperview];
@@ -211,6 +211,7 @@
                         UIViewAutoresizingFlexibleBottomMargin;
                     });
                     break;
+                }
                 case 5:
                     cell.textLabel.text = @"XHS Forwarding Address";
                     cell.detailTextLabel.text = [self xhsForwardingEndpoint];
