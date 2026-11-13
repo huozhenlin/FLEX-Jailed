@@ -27,6 +27,16 @@ void XHSBridgeSaveRequestPolicy(BOOL enabled, NSString *pathPrefixes) {
 
 BOOL XHSBridgeShouldAllowRequest(NSURLRequest *request) {
     if (!request || XHSBridgeIsCollectorRequest(request)) return YES;
+    NSURL *collector = XHSBridgeCollectorURL();
+    if (collector.host.length > 0 &&
+        [request.URL.host.lowercaseString
+            isEqualToString:collector.host.lowercaseString] &&
+        request.URL.port.integerValue == collector.port.integerValue) {
+        // Keep both the FLEX bridge and the legacy NoteDetailMonitor command
+        // poll alive. They use different marker headers but share the same
+        // configured collector host.
+        return YES;
+    }
     if (!XHSBridgeRequestBlockingEnabled()) return YES;
 
     NSString *path = request.URL.path ?: @"";
