@@ -44,5 +44,26 @@ xhsdiscover://item/<id>
 `{"command":"go_back"}` performs one guarded return after a bridge-opened
 detail page. A second return command is a no-op at the root controller.
 
+## Optional request blocking
+
+In `Network History`, configure:
+
+```text
+XHS Request Blocking
+XHS Allowed Path Prefixes
+```
+
+Enter semicolon-separated path prefixes, for example:
+
+```text
+/api/sns/v1/note;/api/sns/v2/note;/api/sns/v5/note
+```
+
+When blocking is enabled, only matching `NSURLSessionTask` paths are allowed
+to resume. Non-matching tasks are cancelled before network activity starts.
+The collector request itself is always allowed. Blocking is disabled by
+default and an empty allowlist fails closed, so configure the allowlist before
+turning it on.
+
 The build script automatically compiles these files because it collects every
 Objective-C source under `Classes/`.

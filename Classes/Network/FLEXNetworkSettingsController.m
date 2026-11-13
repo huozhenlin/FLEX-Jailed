@@ -12,6 +12,7 @@
 #import "FLEXTableView.h"
 #import "FLEXColor.h"
 #import "NSUserDefaults+FLEX.h"
+#import "XHSBridgePolicy.h"
 
 @interface FLEXNetworkSettingsController () <UIActionSheetDelegate>
 @property (nonatomic) float cacheLimitValue;
@@ -22,6 +23,7 @@
 @property (nonatomic, readonly) UISwitch *jsonViewerSwitch;
 @property (nonatomic, readonly) UISlider *cacheLimitSlider;
 @property (nonatomic) UILabel *cacheLimitLabel;
+@property (nonatomic, readonly) UISwitch *xhsBlockingSwitch;
 
 @property (nonatomic) NSMutableArray<NSString *> *hostDenylist;
 @end
@@ -40,6 +42,12 @@
     _cacheMediaSwitch = [UISwitch new];
     _jsonViewerSwitch = [UISwitch new];
     _cacheLimitSlider = [UISlider new];
+    _xhsBlockingSwitch = [UISwitch new];
+    self.xhsBlockingSwitch.on = XHSBridgeRequestBlockingEnabled();
+    [self.xhsBlockingSwitch addTarget:self
+        action:@selector(xhsBlockingToggled:)
+        forControlEvents:UIControlEventValueChanged
+    ];
     
     self.observerSwitch.on = FLEXNetworkObserver.enabled;
     [self.observerSwitch addTarget:self
@@ -109,6 +117,13 @@
     self.cacheLimitValue = sender.value;
 }
 
+- (void)xhsBlockingToggled:(UISwitch *)sender {
+    XHSBridgeSaveRequestPolicy(
+        sender.isOn,
+        XHSBridgeAllowedPathPrefixes()
+    );
+}
+
 
 #pragma mark - Table View Data Source
 
@@ -118,7 +133,7 @@
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     switch (section) {
-        case 0: return 6;
+        case 0: return 8;
         case 1: return self.hostDenylist.count;
         default: return 0;
     }
@@ -201,6 +216,19 @@
                     cell.detailTextLabel.text = [self xhsForwardingEndpoint];
                     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
                     break;
+                case 6:
+                    cell.textLabel.text = @"XHS Request Blocking";
+                    cell.accessoryView = self.xhsBlockingSwitch;
+                    break;
+                case 7:
+                    cell.textLabel.text = @"XHS Allowed Path Prefixes";
+                    cell.detailTextLabel.text =
+                        [XHSBridgeAllowedPathPrefixes() length] > 0
+                        ? XHSBridgeAllowedPathPrefixes()
+                        : @"Not configured";
+                    cell.accessoryType =
+                        UITableViewCellAccessoryDisclosureIndicator;
+                    break;
             }
             
             break;
@@ -224,7 +252,7 @@
 
 - (BOOL)tableView:(UITableView *)tableView shouldHighlightRowAtIndexPath:(NSIndexPath *)ip {
     // Reset denylist and XHS forwarding address are selectable.
-    return ip.section == 0 && (ip.row == 3 || ip.row == 5);
+    return ip.section == 0 && (ip.row == 3 || ip.row == 5 || ip.row == 7);
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -270,6 +298,42 @@
                 [NSUserDefaults.standardUserDefaults
                     setObject:value forKey:@"XRBCollectorEndpoint"];
                 [NSUserDefaults.standardUserDefaults synchronize];
+                [self.tableView reloadRowsAtIndexPaths:@[indexPath]
+                                      withRowAnimation:UITableViewRowAnimationNone];
+            }
+        ]];
+        [self presentViewController:alert animated:YES completion:nil];
+        return;
+    }
+
+    if (indexPath.section == 0 && indexPath.row == 7) {
+        UIAlertController *alert = [
+            UIAlertController
+            alertControllerWithTitle:@"XHS Allowed Path Prefixes"
+            message:@"Use semicolons between prefixes. Blocking is applied before resume."
+            preferredStyle:UIAlertControllerStyleAlert
+        ];
+        [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+            field.placeholder = @"/api/sns/v1/note;/api/sns/v2/note";
+            field.keyboardType = UIKeyboardTypeURL;
+            field.autocapitalizationType =
+                UITextAutocapitalizationTypeNone;
+            field.autocorrectionType = UITextAutocorrectionTypeNo;
+            field.text = XHSBridgeAllowedPathPrefixes();
+        }];
+        [alert addAction:[
+            UIAlertAction actionWithTitle:@"取消"
+            style:UIAlertActionStyleCancel
+            handler:nil
+        ]];
+        [alert addAction:[
+            UIAlertAction actionWithTitle:@"保存"
+            style:UIAlertActionStyleDefault
+            handler:^(__unused UIAlertAction *action) {
+                XHSBridgeSaveRequestPolicy(
+                    self.xhsBlockingSwitch.isOn,
+                    alert.textFields.firstObject.text ?: @""
+                );
                 [self.tableView reloadRowsAtIndexPaths:@[indexPath]
                                       withRowAnimation:UITableViewRowAnimationNone];
             }

@@ -3,6 +3,9 @@
 #import "FLEXNetworkObserver.h"
 #import "FLEXNetworkRecorder.h"
 #import "FLEXNetworkTransaction.h"
+#import "XHSBridgePolicy.h"
+
+#import <objc/runtime.h>
 
 static BOOL XHSBridgeIsInterestingURL(NSURL *URL) {
     NSString *path = URL.path.lowercaseString ?: @"";
@@ -124,4 +127,38 @@ void XHSBridgeInstallNetworkObservation(void) {
                 XHSBridgeForwardTransaction(transaction, YES);
             }
         }];
+
+    SEL resumeSelector = @selector(resume);
+    SEL bridgeResumeSelector = @selector(xhsbridge_resume);
+    Method resumeMethod =
+        class_getInstanceMethod(NSURLSessionTask.class, resumeSelector);
+    Method bridgeResumeMethod =
+        class_getInstanceMethod(NSURLSessionTask.class, bridgeResumeSelector);
+    if (resumeMethod && bridgeResumeMethod) {
+        method_exchangeImplementations(resumeMethod, bridgeResumeMethod);
+    }
 }
+
+@interface NSURLSessionTask (XHSBridgePolicy)
+- (void)xhsbridge_resume;
+@end
+
+@implementation NSURLSessionTask (XHSBridgePolicy)
+
+- (void)xhsbridge_resume {
+    NSURLRequest *request = self.currentRequest ?: self.originalRequest;
+    if (!XHSBridgeShouldAllowRequest(request)) {
+        XHSBridgeLog(@"xhs_request_blocked", @{
+            @"method": request.HTTPMethod ?: @"",
+            @"url_scheme": request.URL.scheme ?: @"",
+            @"url_host": request.URL.host ?: @"",
+            @"url_path": request.URL.path ?: @"",
+            @"reason": @"path_not_allowed"
+        });
+        [self cancel];
+        return;
+    }
+    [self xhsbridge_resume];
+}
+
+@end
