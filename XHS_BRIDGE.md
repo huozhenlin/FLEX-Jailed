@@ -55,10 +55,19 @@ XHS Request Blocking
 XHS Allowed Path Prefixes
 ```
 
-Enter semicolon-separated path prefixes, for example:
+Use:
 
 ```text
-/api/sns/v1/note;/api/sns/v2/note;/api/sns/v5/note
+＋ Add Path Prefix
+− /api/sns/v1/note
+```
+
+Tap `＋` to add one path prefix. Tap a `−` entry to remove it. For example:
+
+```text
+/api/sns/v1/note
+/api/sns/v2/note
+/api/sns/v5/note
 ```
 
 When blocking is enabled, only matching `NSURLSessionTask` paths are allowed

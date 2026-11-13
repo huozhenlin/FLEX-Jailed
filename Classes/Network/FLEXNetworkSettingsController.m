@@ -24,6 +24,7 @@
 @property (nonatomic, readonly) UISlider *cacheLimitSlider;
 @property (nonatomic) UILabel *cacheLimitLabel;
 @property (nonatomic, readonly) UISwitch *xhsBlockingSwitch;
+@property (nonatomic) NSMutableArray<NSString *> *xhsAllowedPrefixes;
 
 @property (nonatomic) NSMutableArray<NSString *> *hostDenylist;
 @end
@@ -35,6 +36,19 @@
     
     [self disableToolbar];
     self.hostDenylist = FLEXNetworkRecorder.defaultRecorder.hostDenylist.mutableCopy;
+    self.xhsAllowedPrefixes = [
+        [XHSBridgeAllowedPathPrefixes() componentsSeparatedByString:@";"]
+        mutableCopy
+    ];
+    [self.xhsAllowedPrefixes
+        filterUsingPredicate:[NSPredicate predicateWithBlock:
+            ^BOOL(NSString *value, NSDictionary *bindings) {
+                NSString *trimmed = [value
+                    stringByTrimmingCharactersInSet:
+                        NSCharacterSet.whitespaceAndNewlineCharacterSet];
+                return trimmed.length > 0;
+            }]
+    ];
     
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
     
@@ -124,17 +138,25 @@
     );
 }
 
+- (void)saveXHSAllowedPrefixes {
+    XHSBridgeSaveRequestPolicy(
+        self.xhsBlockingSwitch.isOn,
+        [self.xhsAllowedPrefixes componentsJoinedByString:@";"]
+    );
+}
+
 
 #pragma mark - Table View Data Source
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 2;
+    return 3;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     switch (section) {
-        case 0: return 8;
+        case 0: return 7;
         case 1: return self.hostDenylist.count;
+        case 2: return self.xhsAllowedPrefixes.count + 1;
         default: return 0;
     }
 }
@@ -143,6 +165,7 @@
     switch (section) {
         case 0: return @"General";
         case 1: return @"Host Denylist";
+        case 2: return @"XHS Allowed Path Prefixes";
         default: return nil;
     }
 }
@@ -221,15 +244,6 @@
                     cell.textLabel.text = @"XHS Request Blocking";
                     cell.accessoryView = self.xhsBlockingSwitch;
                     break;
-                case 7:
-                    cell.textLabel.text = @"XHS Allowed Path Prefixes";
-                    cell.detailTextLabel.text =
-                        [XHSBridgeAllowedPathPrefixes() length] > 0
-                        ? XHSBridgeAllowedPathPrefixes()
-                        : @"Not configured";
-                    cell.accessoryType =
-                        UITableViewCellAccessoryDisclosureIndicator;
-                    break;
             }
             
             break;
@@ -238,6 +252,22 @@
         // Denylist entries
         case 1: {
             cell.textLabel.text = self.hostDenylist[indexPath.row];
+            break;
+        }
+
+        case 2: {
+            if (indexPath.row == self.xhsAllowedPrefixes.count) {
+                cell.textLabel.text = @"＋ Add Path Prefix";
+                cell.textLabel.textColor = tableView.tintColor;
+                cell.accessoryType = UITableViewCellAccessoryNone;
+            } else {
+                cell.textLabel.text = [
+                    NSString stringWithFormat:@"− %@",
+                    self.xhsAllowedPrefixes[indexPath.row]
+                ];
+                cell.textLabel.textColor = FLEXColor.primaryTextColor;
+                cell.accessoryType = UITableViewCellAccessoryNone;
+            }
             break;
         }
         
@@ -253,7 +283,8 @@
 
 - (BOOL)tableView:(UITableView *)tableView shouldHighlightRowAtIndexPath:(NSIndexPath *)ip {
     // Reset denylist and XHS forwarding address are selectable.
-    return ip.section == 0 && (ip.row == 3 || ip.row == 5 || ip.row == 7);
+    return (ip.section == 0 && (ip.row == 3 || ip.row == 5)) ||
+        ip.section == 2;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -307,20 +338,20 @@
         return;
     }
 
-    if (indexPath.section == 0 && indexPath.row == 7) {
+    if (indexPath.section == 2 &&
+        indexPath.row == self.xhsAllowedPrefixes.count) {
         UIAlertController *alert = [
             UIAlertController
-            alertControllerWithTitle:@"XHS Allowed Path Prefixes"
-            message:@"Use semicolons between prefixes. Blocking is applied before resume."
+            alertControllerWithTitle:@"Add XHS Path Prefix"
+            message:@"Only matching NSURLSession paths will be allowed when blocking is enabled."
             preferredStyle:UIAlertControllerStyleAlert
         ];
         [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
-            field.placeholder = @"/api/sns/v1/note;/api/sns/v2/note";
+            field.placeholder = @"/api/sns/v1/note";
             field.keyboardType = UIKeyboardTypeURL;
             field.autocapitalizationType =
                 UITextAutocapitalizationTypeNone;
             field.autocorrectionType = UITextAutocorrectionTypeNo;
-            field.text = XHSBridgeAllowedPathPrefixes();
         }];
         [alert addAction:[
             UIAlertAction actionWithTitle:@"取消"
@@ -331,15 +362,29 @@
             UIAlertAction actionWithTitle:@"保存"
             style:UIAlertActionStyleDefault
             handler:^(__unused UIAlertAction *action) {
-                XHSBridgeSaveRequestPolicy(
-                    self.xhsBlockingSwitch.isOn,
-                    alert.textFields.firstObject.text ?: @""
-                );
-                [self.tableView reloadRowsAtIndexPaths:@[indexPath]
-                                      withRowAnimation:UITableViewRowAnimationNone];
+                NSString *prefix = [
+                    alert.textFields.firstObject.text
+                    stringByTrimmingCharactersInSet:
+                        NSCharacterSet.whitespaceAndNewlineCharacterSet
+                ];
+                if (prefix.length == 0) return;
+                [self.xhsAllowedPrefixes addObject:prefix];
+                [self saveXHSAllowedPrefixes];
+                [self.tableView reloadSections:
+                    [NSIndexSet indexSetWithIndex:2]
+                    withRowAnimation:UITableViewRowAnimationAutomatic];
             }
         ]];
         [self presentViewController:alert animated:YES completion:nil];
+        return;
+    }
+
+    if (indexPath.section == 2 &&
+        indexPath.row < self.xhsAllowedPrefixes.count) {
+        [self.xhsAllowedPrefixes removeObjectAtIndex:indexPath.row];
+        [self saveXHSAllowedPrefixes];
+        [self.tableView deleteRowsAtIndexPaths:@[indexPath]
+                              withRowAnimation:UITableViewRowAnimationAutomatic];
         return;
     }
     
