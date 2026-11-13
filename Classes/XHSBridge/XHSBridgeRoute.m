@@ -12,6 +12,12 @@ static BOOL (*gOriginalHandleRouteURL)(
 );
 static BOOL (*gOriginalHandleActivity)(id, SEL, id);
 static void (*gOriginalCheckLogin)(id, SEL, id);
+static void (*gOriginalStartRouter)(id, SEL);
+static void (*gOriginalRouteToDeeplink)(id, SEL);
+static void (*gOriginalHandleOutsideURL)(id, SEL, id);
+static BOOL (*gOriginalWhitelistRoute)(id, SEL, id);
+static BOOL (*gOriginalShortShareRoute)(id, SEL, id);
+static void (*gOriginalJumpIfNeeded)(id, SEL, id, BOOL);
 
 static NSDictionary *XHSRouteURLSummary(id value) {
     NSURL *url = nil;
@@ -131,6 +137,78 @@ static void XHSRouteCheckLogin(id self, SEL selector, id value) {
     }
 }
 
+static void XHSRouteStartRouter(id self, SEL selector) {
+    XHSBridgeLog(@"deeplink_route_stage", @{
+        @"selector": @"startUrlRouter"
+    });
+    if (gOriginalStartRouter) gOriginalStartRouter(self, selector);
+}
+
+static void XHSRouteToDeeplink(id self, SEL selector) {
+    XHSBridgeLog(@"deeplink_route_stage", @{
+        @"selector": @"routeToDeeplink"
+    });
+    if (gOriginalRouteToDeeplink) {
+        gOriginalRouteToDeeplink(self, selector);
+    }
+}
+
+static void XHSRouteHandleOutsideURL(id self, SEL selector, id value) {
+    XHSBridgeLog(@"deeplink_route_stage", @{
+        @"selector": @"handleOutsideURL:",
+        @"url": XHSRouteURLSummary(value)
+    });
+    if (gOriginalHandleOutsideURL) {
+        gOriginalHandleOutsideURL(self, selector, value);
+    }
+}
+
+static BOOL XHSRouteWhitelist(id self, SEL selector, id value) {
+    XHSBridgeLog(@"deeplink_route_stage", @{
+        @"selector": @"deeplinkToWitheListPageByUrl:",
+        @"url": XHSRouteURLSummary(value)
+    });
+    BOOL result = gOriginalWhitelistRoute
+        ? gOriginalWhitelistRoute(self, selector, value)
+        : NO;
+    XHSBridgeLog(@"deeplink_route_result", @{
+        @"selector": @"deeplinkToWitheListPageByUrl:",
+        @"result": @(result)
+    });
+    return result;
+}
+
+static BOOL XHSRouteShortShare(id self, SEL selector, id value) {
+    XHSBridgeLog(@"deeplink_route_stage", @{
+        @"selector": @"checkShortSharePathAndRoute:",
+        @"url": XHSRouteURLSummary(value)
+    });
+    BOOL result = gOriginalShortShareRoute
+        ? gOriginalShortShareRoute(self, selector, value)
+        : NO;
+    XHSBridgeLog(@"deeplink_route_result", @{
+        @"selector": @"checkShortSharePathAndRoute:",
+        @"result": @(result)
+    });
+    return result;
+}
+
+static void XHSRouteJumpIfNeeded(
+    id self,
+    SEL selector,
+    id value,
+    BOOL setInApp
+) {
+    XHSBridgeLog(@"deeplink_route_stage", @{
+        @"selector": @"jumpIfNeeded:isNeedToSetIsInApp:",
+        @"url": XHSRouteURLSummary(value),
+        @"is_in_app": @(setInApp)
+    });
+    if (gOriginalJumpIfNeeded) {
+        gOriginalJumpIfNeeded(self, selector, value, setInApp);
+    }
+}
+
 void XHSBridgeInstallRouteObservation(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -154,6 +232,18 @@ void XHSBridgeInstallRouteObservation(void) {
         Method loginMethod = class_getInstanceMethod(
             cls, @selector(checkingLoginStatusToRouteUrlWith:)
         );
+        Method startRouterMethod =
+            class_getInstanceMethod(cls, @selector(startUrlRouter));
+        Method deeplinkMethod =
+            class_getInstanceMethod(cls, @selector(routeToDeeplink));
+        Method outsideURLMethod =
+            class_getInstanceMethod(cls, @selector(handleOutsideURL:));
+        Method whitelistMethod =
+            class_getInstanceMethod(cls, @selector(deeplinkToWitheListPageByUrl:));
+        Method shortShareMethod =
+            class_getInstanceMethod(cls, @selector(checkShortSharePathAndRoute:));
+        Method jumpMethod =
+            class_getInstanceMethod(cls, @selector(jumpIfNeeded:isNeedToSetIsInApp:));
 
         if (urlMethod) {
             gOriginalHandleURL = (BOOL (*)(id, SEL, id, id, BOOL))
@@ -180,13 +270,61 @@ void XHSBridgeInstallRouteObservation(void) {
                     (IMP)XHSRouteCheckLogin
                 );
         }
+        if (startRouterMethod) {
+            gOriginalStartRouter = (void (*)(id, SEL))
+                method_setImplementation(
+                    startRouterMethod,
+                    (IMP)XHSRouteStartRouter
+                );
+        }
+        if (deeplinkMethod) {
+            gOriginalRouteToDeeplink = (void (*)(id, SEL))
+                method_setImplementation(
+                    deeplinkMethod,
+                    (IMP)XHSRouteToDeeplink
+                );
+        }
+        if (outsideURLMethod) {
+            gOriginalHandleOutsideURL = (void (*)(id, SEL, id))
+                method_setImplementation(
+                    outsideURLMethod,
+                    (IMP)XHSRouteHandleOutsideURL
+                );
+        }
+        if (whitelistMethod) {
+            gOriginalWhitelistRoute = (BOOL (*)(id, SEL, id))
+                method_setImplementation(
+                    whitelistMethod,
+                    (IMP)XHSRouteWhitelist
+                );
+        }
+        if (shortShareMethod) {
+            gOriginalShortShareRoute = (BOOL (*)(id, SEL, id))
+                method_setImplementation(
+                    shortShareMethod,
+                    (IMP)XHSRouteShortShare
+                );
+        }
+        if (jumpMethod) {
+            gOriginalJumpIfNeeded = (void (*)(id, SEL, id, BOOL))
+                method_setImplementation(
+                    jumpMethod,
+                    (IMP)XHSRouteJumpIfNeeded
+                );
+        }
 
         XHSBridgeLog(@"deeplink_route_hook_installed", @{
             @"class": NSStringFromClass(cls) ?: @"",
             @"handle_url": @(urlMethod != NULL),
             @"handle_route_url": @(routeMethod != NULL),
             @"handle_activity": @(activityMethod != NULL),
-            @"login_check": @(loginMethod != NULL)
+            @"login_check": @(loginMethod != NULL),
+            @"start_router": @(startRouterMethod != NULL),
+            @"route_to_deeplink": @(deeplinkMethod != NULL),
+            @"handle_outside_url": @(outsideURLMethod != NULL),
+            @"whitelist_route": @(whitelistMethod != NULL),
+            @"short_share_route": @(shortShareMethod != NULL),
+            @"jump_if_needed": @(jumpMethod != NULL)
         });
     });
 }
