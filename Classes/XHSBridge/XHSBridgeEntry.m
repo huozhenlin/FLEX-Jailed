@@ -5,6 +5,7 @@
 
 void XHSBridgeInstallCommandPolling(void);
 void XHSBridgeInstallNetworkObservation(void);
+void XHSBridgeInstallRouteObservation(void);
 
 __attribute__((constructor))
 static void XHSBridgeInitialize(void) {
@@ -13,6 +14,7 @@ static void XHSBridgeInitialize(void) {
         dispatch_async(dispatch_get_main_queue(), ^{
             XHSBridgeInstallCommandPolling();
             XHSBridgeInstallNetworkObservation();
+            XHSBridgeInstallRouteObservation();
         });
     }
 }
