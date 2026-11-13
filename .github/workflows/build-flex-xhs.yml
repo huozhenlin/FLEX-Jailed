@@ -1,0 +1,41 @@
+name: Build FLEX XHS Bridge
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "Classes/**"
+      - "build_dylib.sh"
+      - ".github/workflows/build-flex-xhs.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build arm64 dylib
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x build_dylib.sh
+          ./build_dylib.sh arm64
+          test -f Build/FLEX.dylib
+          xcrun --sdk iphoneos file Build/FLEX.dylib || true
+          shasum -a 256 Build/FLEX.dylib | tee Build/FLEX.dylib.sha256
+
+      - name: Upload FLEX dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLEX-XHSBridge-${{ github.sha }}
+          path: |
+            Build/FLEX.dylib
+            Build/FLEX.dylib.sha256
+          if-no-files-found: error
