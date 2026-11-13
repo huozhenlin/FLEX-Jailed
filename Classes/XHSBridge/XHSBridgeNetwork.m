@@ -7,6 +7,8 @@
 
 #import <objc/runtime.h>
 
+static NSUInteger const XHSBridgeResponseBodyLimit = 256 * 1024;
+
 static BOOL XHSBridgeIsInterestingURL(NSURL *URL) {
     NSString *path = URL.path.lowercaseString ?: @"";
     if (![path containsString:@"/api/"]) return NO;
@@ -43,6 +45,26 @@ static id XHSBridgeJSONProjection(NSData *data) {
     return @{@"type": @"non_json"};
 }
 
+static id XHSBridgeResponseBodyPreview(
+    NSData *data,
+    BOOL *truncated
+) {
+    if (truncated) *truncated = NO;
+    if (data.length == 0) return nil;
+
+    NSUInteger length = MIN(data.length, XHSBridgeResponseBodyLimit);
+    if (truncated) *truncated = data.length > length;
+    NSData *bounded = [data subdataWithRange:NSMakeRange(0, length)];
+    id JSON = [NSJSONSerialization JSONObjectWithData:bounded
+                                               options:0
+                                                 error:nil];
+    if (JSON) return JSON;
+
+    NSString *text = [[NSString alloc] initWithData:bounded
+                                           encoding:NSUTF8StringEncoding];
+    return text ?: [bounded base64EncodedStringWithOptions:0];
+}
+
 static void XHSBridgeForwardTransaction(
     FLEXHTTPTransaction *transaction,
     BOOL finished
@@ -72,6 +94,12 @@ static void XHSBridgeForwardTransaction(
             cachedResponseBodyForTransaction:transaction];
     id responseProjection = XHSBridgeJSONProjection(responseBody);
     if (responseProjection) fields[@"response_json"] = responseProjection;
+    if (responseBody.length > 0) {
+        BOOL truncated = NO;
+        id preview = XHSBridgeResponseBodyPreview(responseBody, &truncated);
+        if (preview) fields[@"response_body"] = preview;
+        fields[@"response_body_truncated"] = @(truncated);
+    }
 
     if ([transaction.response isKindOfClass:NSHTTPURLResponse.class]) {
         fields[@"http_code"] =

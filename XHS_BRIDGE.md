@@ -11,15 +11,17 @@ Only filtered request transactions are sent to the configured collector:
 - query parameter names;
 - request and response byte lengths;
 - HTTP status and error code;
-- bounded JSON shape summaries.
+- bounded JSON shape summaries;
+- a bounded response-body preview for filtered requests.
 
 The module uses FLEX's existing `FLEXNetworkObserver` and
 `FLEXNetworkRecorder`, so it sees the same URLSession/NSURLConnection traffic
 that FLEX displays. It subscribes to recorder notifications rather than adding
 a second broad network swizzle.
 
-Headers, cookies, authorization values, device identifiers, tokens and raw
-request/response bodies are not forwarded.
+Request headers, cookies, authorization values, device identifiers and tokens
+are not forwarded. Response bodies are capped at 256 KiB and credential-like
+JSON keys are redacted before forwarding.
 
 ## Deep-link commands
 
