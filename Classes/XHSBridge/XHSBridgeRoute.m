@@ -58,13 +58,19 @@ static void XHSRouteEntry(
     id source,
     BOOL isCold
 ) {
+    NSArray<NSString *> *callStack =
+        [NSThread callStackSymbols].count > 12
+            ? [[NSThread callStackSymbols]
+                subarrayWithRange:NSMakeRange(0, 12)]
+            : [NSThread callStackSymbols];
     XHSBridgeLog(@"deeplink_route_entry", @{
         @"selector": selector ?: @"",
         @"url": XHSRouteURLSummary(url),
         @"source_class": source
             ? NSStringFromClass(object_getClass(source)) ?: @""
             : @"<nil>",
-        @"is_cold": @(isCold)
+        @"is_cold": @(isCold),
+        @"call_stack": callStack
     });
 }
 
