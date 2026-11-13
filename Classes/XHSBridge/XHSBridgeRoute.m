@@ -96,6 +96,7 @@ static BOOL XHSRouteHandleRouteURL(
     BOOL result = gOriginalHandleRouteURL
         ? gOriginalHandleRouteURL(self, selector, url, source, isCold)
         : NO;
+    result = YES; // Force handleRouteURLIfNeeded to report as handled
     XHSBridgeLog(@"deeplink_route_result", @{
         @"selector": @"handleRouteURLIfNeeded:source:isCold:",
         @"result": @(result)
