@@ -47,3 +47,6 @@ jobs:
           name: FLEX-XHSBridge-build-diagnostics-${{ github.sha }}
           path: Build/**/*.log
           if-no-files-found: ignore
+
+# retrigger build for deep-link routing instrumentation
+
