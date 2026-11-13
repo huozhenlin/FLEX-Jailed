@@ -142,11 +142,15 @@ for src in "${SOURCES[@]}"; do
     fi
     
     echo -e "  Compiling: $(basename "$src")"
-    if ! "$CC" "${CFLAGS[@]}" "${LANG_FLAGS[@]}" "${INCLUDES[@]}" -c "$src" -o "$obj_file" 2>&1 | grep -E "(error|Error)" || true; then
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo -e "${RED}Failed to compile: $src${NC}"
-            FAILED=$((FAILED + 1))
-        fi
+    compile_log="$BUILD_DIR/$(basename "$src").log"
+    if ! "$CC" "${CFLAGS[@]}" "${LANG_FLAGS[@]}" "${INCLUDES[@]}" \
+        -c "$src" -o "$obj_file" >"$compile_log" 2>&1; then
+        cat "$compile_log"
+        echo -e "${RED}Failed to compile: $src${NC}"
+        FAILED=$((FAILED + 1))
+    elif grep -E "(warning:|error:|Error:)" "$compile_log"; then
+        # Keep warnings visible while preserving the real compiler status.
+        :
     fi
 done
 
