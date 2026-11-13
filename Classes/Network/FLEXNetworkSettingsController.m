@@ -84,6 +84,12 @@
     return [NSString stringWithFormat:@"Cache Limit (%@ MB)", @(limitInMB)];
 }
 
+- (NSString *)xhsForwardingEndpoint {
+    NSString *endpoint = [NSUserDefaults.standardUserDefaults
+        stringForKey:@"XRBCollectorEndpoint"];
+    return endpoint.length > 0 ? endpoint : @"http://172.18.177.3:8901/events";
+}
+
 
 #pragma mark - Settings Actions
 
@@ -112,7 +118,7 @@
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     switch (section) {
-        case 0: return 5;
+        case 0: return 6;
         case 1: return self.hostDenylist.count;
         default: return 0;
     }
@@ -190,6 +196,11 @@
                         UIViewAutoresizingFlexibleBottomMargin;
                     });
                     break;
+                case 5:
+                    cell.textLabel.text = @"XHS Forwarding Address";
+                    cell.detailTextLabel.text = [self xhsForwardingEndpoint];
+                    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+                    break;
             }
             
             break;
@@ -212,12 +223,60 @@
 #pragma mark - Table View Delegate
 
 - (BOOL)tableView:(UITableView *)tableView shouldHighlightRowAtIndexPath:(NSIndexPath *)ip {
-    // Can only select the "Reset Host Denylist" row
-    return ip.section == 0 && ip.row == 2;
+    // Reset denylist and XHS forwarding address are selectable.
+    return ip.section == 0 && (ip.row == 3 || ip.row == 5);
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
+
+    if (indexPath.section == 0 && indexPath.row == 5) {
+        UIAlertController *alert = [
+            UIAlertController
+            alertControllerWithTitle:@"XHS Forwarding Address"
+            message:@"Only filtered XHS request/response summaries are forwarded."
+            preferredStyle:UIAlertControllerStyleAlert
+        ];
+        [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+            field.placeholder = @"http://电脑IP:8901/events";
+            field.keyboardType = UIKeyboardTypeURL;
+            field.autocapitalizationType =
+                UITextAutocapitalizationTypeNone;
+            field.autocorrectionType = UITextAutocorrectionTypeNo;
+            field.text = [self xhsForwardingEndpoint];
+        }];
+        [alert addAction:[
+            UIAlertAction actionWithTitle:@"取消"
+            style:UIAlertActionStyleCancel
+            handler:nil
+        ]];
+        [alert addAction:[
+            UIAlertAction actionWithTitle:@"保存"
+            style:UIAlertActionStyleDefault
+            handler:^(__unused UIAlertAction *action) {
+                NSString *value = [
+                    alert.textFields.firstObject.text
+                    stringByTrimmingCharactersInSet:
+                        NSCharacterSet.whitespaceAndNewlineCharacterSet
+                ];
+                if (![value containsString:@"://"]) {
+                    value = [@"http://" stringByAppendingString:value];
+                }
+                NSURL *URL = [NSURL URLWithString:value];
+                if (!URL.host.length) return;
+                if (URL.path.length == 0) {
+                    value = [value stringByAppendingString:@"/events"];
+                }
+                [NSUserDefaults.standardUserDefaults
+                    setObject:value forKey:@"XRBCollectorEndpoint"];
+                [NSUserDefaults.standardUserDefaults synchronize];
+                [self.tableView reloadRowsAtIndexPaths:@[indexPath]
+                                      withRowAnimation:UITableViewRowAnimationNone];
+            }
+        ]];
+        [self presentViewController:alert animated:YES completion:nil];
+        return;
+    }
     
     [FLEXAlert makeAlert:^(FLEXAlert *make) {
         make.title(@"Reset Host Denylist");
